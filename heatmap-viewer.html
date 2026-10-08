@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тепловая карта теста</title>
+<!--
+  Вьюер тепловой карты для юзтест-прототипа (скилл prototype-user-test).
+  Данные: CSV из Google-таблицы событий (Файл → Скачать → CSV) — перетащить в окно,
+  или ссылка на опубликованный CSV в поле / параметре ?src=.
+  Фон: скриншоты экранов. Подхватываются из папки screens/<экран>.png рядом с файлом
+  или перетаскиваются в окно (имя файла = имя экрана из setScreen: map+sheet_full.png).
+  Никаких данных внутри файла нет — его можно хостить рядом с прототипом.
+-->
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e2e2dd; --accent: #2457d6; --drop: rgba(36, 87, 214, .08);
+    --phone: #d9d9d4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151514; --panel: #1f1f1d; --text: #ececea; --muted: #9a9a94;
+      --line: #33332f; --accent: #7aa2ff; --drop: rgba(122, 162, 255, .12);
+      --phone: #2c2c29;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151514; --panel: #1f1f1d; --text: #ececea; --muted: #9a9a94;
+    --line: #33332f; --accent: #7aa2ff; --drop: rgba(122, 162, 255, .12);
+    --phone: #2c2c29;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > span { font-size: 12px; color: var(--muted); }
+  select, input[type=text], button { font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+  #groups { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .drop { margin-top: 12px; border: 2px dashed var(--line); border-radius: 12px; padding: 18px;
+    text-align: center; color: var(--muted); }
+  .drop.over { background: var(--drop); border-color: var(--accent); }
+  #panels { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px; width: 344px; max-width: 100%; }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card canvas { width: 100%; height: auto; display: block; border-radius: 8px;
+    background: var(--phone); margin: 8px 0; }
+  .stats { font-size: 13px; }
+  .stats table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .stats td { padding: 2px 0; border-top: 1px solid var(--line); }
+  .stats td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .legend i { display: block; width: 160px; height: 10px; border-radius: 5px;
+    background: linear-gradient(90deg, #2b6cff, #00d0ff, #34e07a, #ffe14d, #ff3b30); }
+  .warn { color: #c2410c; font-size: 12px; }
+  @media (max-width: 600px) { .controls { gap: 10px; } .card { width: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Тепловая карта теста</h1>
+  <div class="muted">Куда тапали респонденты: по экранам, вариантам и когортам. Данные остаются в браузере.</div>
+</header>
+<main>
+  <section class="controls">
+    <div class="field" style="flex:1 1 280px">
+      <span>Ссылка на опубликованный CSV (необязательно)</span>
+      <div style="display:flex; gap:8px">
+        <input type="text" id="src" placeholder="https://docs.google.com/…/pub?output=csv" style="flex:1">
+        <button id="load">Загрузить</button>
+      </div>
+    </div>
+    <div class="field">
+      <span>Экран</span>
+      <select id="screen"></select>
+    </div>
+    <div class="field">
+      <span>Режим</span>
+      <select id="mode"><option value="heat">Тепло</option><option value="dots">Точки</option></select>
+    </div>
+    <div class="field">
+      <span>Радиус пятна</span>
+      <input type="range" id="radius" min="10" max="60" value="28">
+    </div>
+    <div class="field" style="flex:1 1 100%">
+      <span>Группы</span>
+      <div id="groups" class="muted">Загрузите данные</div>
+    </div>
+    <label class="chk"><input type="checkbox" id="merge"> Объединять когорты варианта</label>
+    <label class="chk"><input type="checkbox" id="compare" checked> Сравнивать группы рядом</label>
+    <label class="chk"><input type="checkbox" id="first"> Только первый тап сессии на экране</label>
+    <label class="chk"><input type="checkbox" id="finished"> Только дошедшие до финиша</label>
+    <label class="chk" title="Одна цветовая шкала для всех карт, плотность на одного респондента — цвета вариантов можно сравнивать"><input type="checkbox" id="shared" checked> Общая шкала (на респондента)</label>
+  </section>
+
+  <div class="drop" id="drop">
+    Перетащите сюда CSV таблицы событий и скриншоты экранов (<code>map.png</code>; для варианта — <code>A-gallery@map.png</code>)
+    или <label style="color:var(--accent);cursor:pointer">выберите файлы<input type="file" id="files" multiple accept=".csv,image/*" hidden></label>
+  </div>
+  <div class="legend"><span>мало</span><i></i><span>много тапов</span></div>
+  <div id="panels"></div>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { rows: [], images: {}, missing: {} };
+  const DEFAULT_ASPECT = 844 / 390; // если скриншота нет
+
+  // ── CSV ───────────────────────────────────────────────────────────────
+  function parseCSV(text) {
+    const out = []; let row = []; let cell = ''; let q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (c === '"') q = false;
+        else cell += c;
+      } else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); out.push(row); row = []; cell = '';
+      } else cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); out.push(row); }
+    return out;
+  }
+
+  function ingest(text) {
+    const table = parseCSV(text).filter((r) => r.length > 1);
+    if (!table.length) return;
+    const head = table[0].map((h) => h.trim());
+    const idx = (name) => head.indexOf(name);
+    const iS = idx('session'), iG = idx('group'), iT = idx('t_sec'), iE = idx('event'), iD = idx('data');
+    if (iS < 0 || iE < 0) { alert('В CSV нет колонок session / event — это точно таблица событий?'); return; }
+    for (const r of table.slice(1)) {
+      state.rows.push({ session: r[iS], group: r[iG] || '', t: parseFloat(String(r[iT]).replace(',', '.')) || 0, /* Google отдаёт «3,8» в ру-локали */ event: r[iE], data: r[iD] || '' });
+    }
+    rebuildControls();
+  }
+
+  // ── Модель ────────────────────────────────────────────────────────────
+  const groupKey = (g) => ($('merge').checked ? g.split('·')[0] : g);
+
+  function model() {
+    const finished = new Set(), taps = [], views = {};
+    for (const r of state.rows) {
+      if (r.event === 'test_finish') finished.add(r.session);
+      else if (r.event === 'screen_view') {
+        const k = r.data + '\u0000' + groupKey(r.group);
+        (views[k] = views[k] || new Set()).add(r.session);
+      } else if (r.event === 'tap') {
+        const [screen, x, y, hit] = r.data.split('|');
+        const fx = parseFloat(x), fy = parseFloat(y);
+        if (!screen || isNaN(fx) || isNaN(fy)) continue;
+        taps.push({ session: r.session, group: groupKey(r.group), t: r.t, screen, x: fx, y: fy, hit: hit || '' });
+      }
+    }
+    return { finished, taps, views };
+  }
+
+  function rebuildControls() {
+    const { taps } = model();
+    const screens = {}, groups = {};
+    taps.forEach((p) => { screens[p.screen] = (screens[p.screen] || 0) + 1; groups[p.group] = (groups[p.group] || 0) + 1; });
+    const sel = $('screen'), prev = sel.value;
+    sel.innerHTML = '';
+    Object.entries(screens).sort((a, b) => b[1] - a[1]).forEach(([s, n]) => {
+      const o = document.createElement('option'); o.value = s; o.textContent = `${s} · ${n}`; sel.appendChild(o);
+    });
+    if (screens[prev]) sel.value = prev;
+    const box = $('groups'), checked = new Set([...box.querySelectorAll('input:checked')].map((i) => i.value));
+    // первая загрузка или сменились ключи групп (объединение когорт) — отмечаем все
+    const fresh = !Object.keys(groups).some((g) => checked.has(g));
+    box.innerHTML = ''; box.classList.remove('muted');
+    Object.keys(groups).sort().forEach((g) => {
+      const l = document.createElement('label'); l.className = 'chk';
+      l.innerHTML = `<input type="checkbox" value="${g.replace(/"/g, '&quot;')}"> ${g || '(без группы)'} <span class="muted">${groups[g]}</span>`;
+      l.querySelector('input').checked = fresh || checked.has(g);
+      box.appendChild(l);
+    });
+    if (!Object.keys(groups).length) box.innerHTML = '<span class="muted">В данных нет событий tap — подключён ли trackTaps?</span>';
+    render();
+  }
+
+  // ── Отрисовка ─────────────────────────────────────────────────────────
+  const palette = (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 1;
+    const g = c.getContext('2d'), grad = g.createLinearGradient(0, 0, 256, 0);
+    [[0, '#2b6cff'], [.25, '#00d0ff'], [.5, '#34e07a'], [.75, '#ffe14d'], [1, '#ff3b30']].forEach(([s, col]) => grad.addColorStop(s, col));
+    g.fillStyle = grad; g.fillRect(0, 0, 256, 1);
+    return g.getImageData(0, 0, 256, 1).data;
+  })();
+
+  // Плотность считаем во float-сетке (а не в 8-битном канале canvas), чтобы веса
+  // «на сессию» не терялись и шкалу можно было сделать общей для нескольких карт.
+  function density(w, h, pts, radius, weight) {
+    const grid = new Float32Array(w * h), r = Math.ceil(radius), s2 = 2 * (radius / 2.2) ** 2;
+    let max = 0;
+    for (const p of pts) {
+      const cx = p.x * w, cy = p.y * h;
+      for (let y = Math.max(0, Math.floor(cy - r)); y < Math.min(h, cy + r); y++) {
+        for (let x = Math.max(0, Math.floor(cx - r)); x < Math.min(w, cx + r); x++) {
+          const d2 = (x - cx) ** 2 + (y - cy) ** 2;
+          if (d2 > r * r) continue;
+          const i = y * w + x, v = (grid[i] += weight * Math.exp(-d2 / s2));
+          if (v > max) max = v;
+        }
+      }
+    }
+    return { grid, max };
+  }
+
+  function heatLayer(w, h, dens, max) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    if (!max) return c;
+    const g = c.getContext('2d'), img = g.createImageData(w, h), d = img.data;
+    for (let i = 0; i < dens.grid.length; i++) {
+      const a = dens.grid[i] / max; if (a < 0.02) continue;
+      const v = Math.min(255, Math.round(a * 255)), j = v * 4, k = i * 4;
+      d[k] = palette[j]; d[k + 1] = palette[j + 1]; d[k + 2] = palette[j + 2];
+      d[k + 3] = Math.min(220, 40 + v * 0.8); // слабые пятна полупрозрачные, фон читается
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+
+  // Скриншот ищем сначала для варианта (screens/A-sheet/step_2.png), потом общий (screens/step_2.png).
+  // Перетащенный файл «A-sheet@step_2.png» — для варианта, «step_2.png» — общий.
+  const variantOf = (g) => g.split('·')[0];
+  function imageFor(screen, group) {
+    const v = group && variantOf(group);
+    if (v) {
+      const k = v + '/' + screen;
+      if (state.images[k]) return state.images[k];
+      tryLoad(k, `screens/${encodeURIComponent(v)}/${encodeURIComponent(screen)}.png`);
+    }
+    if (state.images[screen]) return state.images[screen];
+    tryLoad(screen, `screens/${encodeURIComponent(screen)}.png`);
+    return null;
+  }
+  function tryLoad(key, url) {
+    if (state.missing[key]) return;
+    state.missing[key] = 'loading';
+    const img = new Image();
+    img.onload = () => { state.images[key] = img; render(); };
+    img.onerror = () => { state.missing[key] = true; render(); };
+    img.src = url;
+  }
+
+  function render() {
+    const panels = $('panels'); panels.innerHTML = '';
+    const screen = $('screen').value; if (!screen) return;
+    const { finished, taps, views } = model();
+    const chosen = [...$('groups').querySelectorAll('input:checked')].map((i) => i.value);
+    let pts = taps.filter((p) => p.screen === screen && chosen.includes(p.group));
+    if ($('finished').checked) pts = pts.filter((p) => finished.has(p.session));
+    if ($('first').checked) {
+      const seen = new Set();
+      pts = pts.slice().sort((a, b) => a.t - b.t).filter((p) => !seen.has(p.session) && seen.add(p.session));
+    }
+    const sets = $('compare').checked
+      ? chosen.map((g) => ({ title: g, groups: [g], pts: pts.filter((p) => p.group === g) }))
+      : [{ title: chosen.length === 1 ? chosen[0] : 'Все выбранные группы', groups: chosen, pts }];
+    const shared = $('shared').checked && sets.length > 1;
+    const W = 640, radius = +$('radius').value * (W / 320);
+    const built = sets.map((set) => {
+      const img = imageFor(screen, set.groups.length === 1 ? set.groups[0] : '');
+      const H = Math.round(W * (img ? img.naturalHeight / img.naturalWidth : DEFAULT_ASPECT));
+      const sessions = new Set(set.pts.map((p) => p.session)).size;
+      // общая шкала: вес точки = 1/сессий — сравниваем «тапов на респондента», а не сырые суммы
+      const dens = density(W, H, set.pts, radius, shared ? 1 / Math.max(1, sessions) : 1);
+      return { ...set, img, H, sessions, dens };
+    });
+    const sharedMax = Math.max(0, ...built.map((b) => b.dens.max));
+    built.forEach((b) => panels.appendChild(card(b, screen, views, W, shared ? sharedMax : b.dens.max)));
+  }
+
+  function card(b, screen, views, W, max) {
+    const { title, groups, pts, img, H, sessions } = b;
+    const el = document.createElement('div'); el.className = 'card';
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d');
+    if (img) g.drawImage(img, 0, 0, W, H);
+    if ($('mode').value === 'heat') g.drawImage(heatLayer(W, H, b.dens, max), 0, 0);
+    else {
+      g.fillStyle = 'rgba(255,59,48,.55)'; g.strokeStyle = '#fff'; g.lineWidth = 2;
+      pts.forEach((p) => { g.beginPath(); g.arc(p.x * W, p.y * H, 9, 0, 7); g.fill(); g.stroke(); });
+    }
+    const viewed = new Set();
+    groups.forEach((gk) => (views[screen + '\u0000' + gk] || []).forEach((s) => viewed.add(s)));
+    const hits = {};
+    pts.forEach((p) => { const k = p.hit || 'мимо размеченных элементов'; hits[k] = (hits[k] || 0) + 1; });
+    const top = Object.entries(hits).sort((a, b) => b[1] - a[1]).slice(0, 8)
+      .map(([k, n]) => `<tr><td>${esc(k)}</td><td>${n} · ${Math.round((n / pts.length) * 100)}%</td></tr>`).join('');
+
+    el.innerHTML = `<h2>${esc(title || '(без группы)')}</h2>
+      <div class="muted">${esc(screen)}</div>`;
+    el.appendChild(cv);
+    const stats = document.createElement('div'); stats.className = 'stats';
+    stats.innerHTML = `Тапов: <b>${pts.length}</b> · сессий с тапами: <b>${sessions}</b>` +
+      (viewed.size ? ` · видели экран: <b>${viewed.size}</b>` : '') +
+      (sessions ? ` · тапов на сессию: <b>${(pts.length / sessions).toFixed(1)}</b>` : '') +
+      (pts.length ? `<table>${top}</table>` : '<div class="muted">Тапов нет</div>') +
+      (img || state.missing[screen] !== true ? ''
+        : `<div class="warn">Нет скриншота screens/${esc(screen)}.png — перетащите его в окно</div>`);
+    el.appendChild(stats);
+    const btn = document.createElement('button'); btn.textContent = 'Скачать PNG'; btn.style.marginTop = '8px';
+    btn.onclick = () => {
+      try {
+        const a = document.createElement('a');
+        a.href = cv.toDataURL('image/png');
+        a.download = `heatmap_${screen}_${title}.png`.replace(/[^\wа-яё.+-]+/gi, '_');
+        a.click();
+      } catch {
+        alert('Браузер не даёт сохранить картинку со скриншотом из локальной папки. Перетащите скриншоты в окно или откройте вьюер через сервер.');
+      }
+    };
+    el.appendChild(btn);
+    return el;
+  }
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ── Загрузка ──────────────────────────────────────────────────────────
+  function handleFiles(files) {
+    for (const f of files) {
+      if (/\.csv$/i.test(f.name) || f.type === 'text/csv') f.text().then(ingest);
+      else if (f.type.startsWith('image/')) {
+        const img = new Image();
+        img.onload = () => { state.images[f.name.replace(/\.[^.]+$/, '').replace('@', '/')] = img; render(); };
+        img.src = URL.createObjectURL(f);
+      }
+    }
+  }
+
+  async function loadUrl(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.status);
+      state.rows = []; ingest(await res.text());
+    } catch (e) {
+      alert('Не удалось загрузить CSV по ссылке (' + e.message + '). Скачайте таблицу как CSV и перетащите файл в окно.');
+    }
+  }
+
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach((t) => addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+  $('files').onchange = (e) => handleFiles(e.target.files);
+  $('load').onclick = () => $('src').value.trim() && loadUrl($('src').value.trim());
+  ['screen', 'mode', 'radius', 'compare', 'first', 'finished', 'shared'].forEach((id) => $(id).addEventListener('input', render));
+  $('groups').addEventListener('change', render);
+  $('merge').addEventListener('change', rebuildControls);
+  // Готовый отчёт одним файлом: CSV в <script type="text/csv">, скриншоты в <img data-screen="map" src="data:…">
+  // (для варианта — data-screen="A-gallery/map"). Тогда файл открывается двойным кликом, без сервера.
+  document.querySelectorAll('img[data-screen]').forEach((img) => { state.images[img.dataset.screen] = img; });
+  document.querySelectorAll('script[type="text/csv"]').forEach((el) => ingest(el.textContent));
+  const src = new URLSearchParams(location.search).get('src');
+  if (src) { $('src').value = src; loadUrl(src); }
+})();
+</script>
+</body>
+</html>
